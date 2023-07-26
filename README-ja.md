@@ -114,7 +114,7 @@ Container AppからFile Storageの利用は現時点ではプレビューとな�
 
 File Storageのアカウント認証が現時点ではStorage Keyのみとなっており、Microsoft Entra ID(AAD)による認証が行えません。
 
-セキュリティ向上の一環として、Container App EnvironmentをVirtual Network内に配置して、File StorageへのアクセスはPrivate Endpointを使っています。
+セキュリティ向上の一環として、Container App EnvironmentをVirtual Network内に配置して、File StorageへのアクセスはService Endpointを使っています。
 
 これにより、File Storageをインターネット上に晒すことなく安全に利用しています。
 

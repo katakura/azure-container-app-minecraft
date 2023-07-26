@@ -113,7 +113,7 @@ File storage usage from the Container App is currently in preview mode.
 
 At present, the account authentication for File Storage is only through a Storage Key, and cannot be authenticated using Microsoft Entra ID (AAD).
 
-For security purposes, the Container App Environment is located within the Virtual Network, and access to File Storage is made using Private Endpoint.
+For security purposes, the Container App Environment is located within the Virtual Network, and access to File Storage is made using Service Endpoint.
 
 This allows File Storage to be used safely without exposing it to the Internet.
 
