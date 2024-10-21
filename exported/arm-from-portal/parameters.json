@@ -1,0 +1,21 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "containerapps_minecraft_name": {
+            "value": null
+        },
+        "virtualNetworks_vnet_minecraft_name": {
+            "value": null
+        },
+        "managedEnvironments_acaenv_minecraft_name": {
+            "value": null
+        },
+        "workspaces_log_minecraft_name": {
+            "value": null
+        },
+        "storageAccounts_stminecraftz6g4sa4sns7fw_name": {
+            "value": null
+        }
+    }
+}

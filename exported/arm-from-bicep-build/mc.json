@@ -1,0 +1,322 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.30.23.60470",
+      "templateHash": "16703125251648874942"
+    }
+  },
+  "parameters": {
+    "baseName": {
+      "type": "string",
+      "defaultValue": "mc",
+      "metadata": {
+        "description": "Base string to be assigned to Azure resources"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region where the resources will be deployed. If not specified, it will be the same as the resource groups region."
+      }
+    },
+    "vnetCidr": {
+      "type": "string",
+      "defaultValue": "10.10.0.0/16",
+      "metadata": {
+        "description": "The CIDR of the entire virtual network."
+      }
+    },
+    "acaSubnetCidr": {
+      "type": "string",
+      "defaultValue": "10.10.0.0/23",
+      "metadata": {
+        "description": "CIDR for Container Apps Environment."
+      }
+    },
+    "now": {
+      "type": "string",
+      "defaultValue": "[toLower(utcNow())]",
+      "metadata": {
+        "description": "Suffix to be assigned to revisions of container apps."
+      }
+    },
+    "cpu": {
+      "type": "string",
+      "defaultValue": "1.0",
+      "allowedValues": [
+        "0.5",
+        "1.0",
+        "1.5",
+        "2.0"
+      ],
+      "metadata": {
+        "description": "Number of CPU cores assigned to the container app."
+      }
+    },
+    "memory": {
+      "type": "string",
+      "defaultValue": "2.0Gi",
+      "allowedValues": [
+        "1.0Gi",
+        "2.0Gi",
+        "3.0Gi",
+        "4.0Gi"
+      ],
+      "metadata": {
+        "description": "Memory allocated to the container app."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "docker.io/itzg/minecraft-server:latest",
+      "metadata": {
+        "description": "Docker image URL for Minecraft Java Edition by itzg."
+      }
+    },
+    "minecraftPort": {
+      "type": "int",
+      "defaultValue": 25565,
+      "metadata": {
+        "description": "TCP port number for Minecraft server."
+      }
+    },
+    "volumeMountPoint": {
+      "type": "string",
+      "defaultValue": "/data",
+      "metadata": {
+        "description": "Mount point of persistent storage."
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "maxValue": 1,
+      "metadata": {
+        "description": "The minimum number of replicas for the container app. If this value is set to 0, the container will stop after being idle for 5 minutes."
+      }
+    },
+    "env": {
+      "type": "array",
+      "metadata": {
+        "description": "The environment variables required to start a Minecraft server."
+      }
+    }
+  },
+  "variables": {
+    "omsName": "[format('log-{0}', parameters('baseName'))]",
+    "acaName": "[format('acaenv-{0}', parameters('baseName'))]",
+    "vnetName": "[format('vnet-{0}', parameters('baseName'))]",
+    "acaSubnetName": "snet-aca",
+    "fileShareName": "mcdata",
+    "storageName": "[take(format('st{0}{1}', toLower(parameters('baseName')), uniqueString(resourceGroup().id)), 24)]",
+    "containerName": "minecraft"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2022-06-01-preview",
+      "name": "[variables('containerName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('acaName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "secrets": [],
+          "registries": [],
+          "ingress": {
+            "external": true,
+            "exposedPort": "[parameters('minecraftPort')]",
+            "targetPort": "[parameters('minecraftPort')]",
+            "transport": "tcp",
+            "allowInsecure": false,
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          }
+        },
+        "template": {
+          "revisionSuffix": "[parameters('now')]",
+          "containers": [
+            {
+              "image": "[parameters('containerImage')]",
+              "name": "[variables('containerName')]",
+              "env": "[parameters('env')]",
+              "args": [],
+              "probes": [],
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('fileShareName')]",
+                  "mountPath": "[parameters('volumeMountPoint')]"
+                }
+              ],
+              "resources": {
+                "cpu": "[parameters('cpu')]",
+                "memory": "[parameters('memory')]"
+              }
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": 1,
+            "rules": []
+          },
+          "volumes": [
+            {
+              "storageType": "AzureFile",
+              "name": "[variables('fileShareName')]",
+              "storageName": "[variables('fileShareName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-02-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetCidr')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('acaSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('acaSubnetCidr')]",
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.Storage"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[format('{0}/{1}', variables('acaName'), variables('fileShareName'))]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[variables('storageName')]",
+          "shareName": "[variables('fileShareName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2022-09-01').keys[0].value]",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('acaName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "vnetConfiguration": {
+          "internal": false,
+          "infrastructureSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('acaSubnetName'))]"
+        },
+        "appLogsConfiguration": {
+          "destination": "azure-monitor"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('omsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[format('Microsoft.App/managedEnvironments/{0}', variables('acaName'))]",
+      "name": "[variables('omsName')]",
+      "properties": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('omsName'))]",
+        "metrics": [],
+        "logs": [
+          {
+            "enabled": true,
+            "categoryGroup": "allLogs"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('omsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('storageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Premium_LRS"
+      },
+      "kind": "FileStorage",
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Deny",
+          "virtualNetworkRules": [
+            {
+              "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('acaSubnetName'))]",
+              "action": "Allow"
+            }
+          ]
+        },
+        "allowSharedKeyAccess": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageName'), 'default', variables('fileShareName'))]",
+      "properties": {
+        "shareQuota": 100
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "minecraftServerAddress": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('containerName')), '2022-06-01-preview').configuration.ingress.fqdn]"
+    }
+  }
+}
